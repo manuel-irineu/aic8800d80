@@ -250,6 +250,10 @@ ccflags-$(CONFIG_COEX) += -DCONFIG_COEX
 
 ccflags-y += -DCONFIG_RWNX_FULLMAC
 ccflags-y += -I$(src)/.
+CFG80211_SET_MONITOR_CHANNEL_HAS_DEV := $(shell sed -n '/set_monitor_channel/{n;p;}' "$(srctree)/include/net/cfg80211.h" 2>/dev/null | grep -q 'struct net_device \*dev' && echo y)
+ifeq ($(CFG80211_SET_MONITOR_CHANNEL_HAS_DEV),y)
+ccflags-y += -DAIC_CFG80211_SET_MONITOR_CHANNEL_HAS_DEV
+endif
 ccflags-$(CONFIG_RWNX_RADAR) += -DCONFIG_RWNX_RADAR
 ccflags-$(CONFIG_RWNX_MON_DATA) += -DCONFIG_RWNX_MON_DATA
 ccflags-$(CONFIG_RWNX_MON_XMIT) += -DCONFIG_RWNX_MON_XMIT
