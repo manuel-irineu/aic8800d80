@@ -1,3 +1,15 @@
+# Fork Maintenance Note
+
+This repository is a personal fork of the upstream
+[shenmintao/aic8800d80](https://github.com/shenmintao/aic8800d80) project. It
+is used to maintain and test additional Linux compatibility fixes while
+preserving the upstream driver history and documentation.
+
+Fork-specific fixes are kept in dedicated branches. The branch
+`fix/debian-cfg80211-monitor-channel` documents and carries a Debian 13
+cfg80211 compatibility fix; see
+[docs/debian-13-cfg80211-compatibility.md](docs/debian-13-cfg80211-compatibility.md).
+
 # AIC8800 Linux Wi-Fi and Bluetooth Driver
 This driver supports AIC8800-family chipsets used by devices such as the Tenda U11, AX913B, and TP-Link Archer TX1U Nano.
 
@@ -180,4 +192,3 @@ The Wi-Fi-reset recovery behavior tracked in
 [issue #53](https://github.com/shenmintao/aic8800d80/issues/53) remains a known
 limitation: after an airplane-mode or hotspot reset, Bluetooth may require a
 physical unplug/replug of the adapter.
-
