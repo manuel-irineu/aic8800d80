@@ -17,7 +17,7 @@ module without replacing the distribution's `btusb.ko`.
 - Wi-Fi-only and Wi-Fi/Bluetooth combo adapter support from the same branch
 - Comprehensive error handling
 - Colored output and logging
-- Compatible with Ubuntu, Debian, Fedora, and derivatives (DKMS supported `dkms.conf`)
+- Compatible with Ubuntu, Debian, Fedora, Arch Linux, and derivatives (DKMS supported `dkms.conf`)
 
 ## Usage
 
@@ -28,6 +28,21 @@ git clone https://github.com/shenmintao/aic8800d80.git && cd aic8800d80 && chmod
 # Run the installation
 sudo ./install.sh
 ```
+
+On Arch Linux and derivatives, the installer uses the existing pacman package
+database. It does not refresh that database or upgrade the system. If pacman
+cannot download dependencies because the database is stale, run
+`sudo pacman -Syu` yourself, reboot if the kernel was updated, and rerun the
+installer with headers matching the running kernel.
+
+The USB modules declare the complete firmware set shipped in `fw/`, including
+configuration files and extension patches, so initramfs tools can include those
+files when they include the modules. Rerun the installer after updating the
+driver to rebuild DKMS modules and refresh the current kernel's initramfs.
+If the adapter only works after reloading its modules after boot, check that
+the initramfs contains its `aic8800*/` firmware directory (issue #117).
+Custom firmware paths supplied with `aic_fw_path` still need to be included
+in the initramfs by the administrator.
 
 > For more information, please refer to the [README.md](README.md) file.
 

@@ -15,10 +15,20 @@ This driver is for the AIC8800D80 chipset, supported by devices such as the Tend
 > kernel's standard `btusb` driver. After switching branches, rerun
 > `sudo ./install.sh` and reboot; switching the Git branch alone does not
 > replace the firmware already installed under `/lib/firmware`.
+>
+> If `chip_mcu_id` is missing from the log, enable
+> [diagnostic logging](#diagnostic-logging) and repeat device initialization.
 
 Added support for devices with Vendor ID 368B (tested).
 
 Tested on Linux kernel 6.16 with Ubuntu 25.04 and 6.1.0.27 with Debian 12.
+
+In [issue #110](https://github.com/shenmintao/aic8800d80/issues/110), a user
+reports Wi-Fi and Bluetooth audio working on one generic AX902 adapter
+(`chip_id=7, chip_mcu_id=1`) with Debian 13 and kernel
+`6.12.111+deb13-amd64`, including after reboot and USB reconnection. That
+configuration uses the matched `legacy-mcu1` driver and firmware with the
+kernel's standard `btusb`; it is not a guarantee for other hardware revisions.
 
 > [!NOTE]
 > **Maintained branches:** This repository now maintains two hardware branches:
@@ -42,10 +52,53 @@ probe support is unavailable.
 ### Disclaimer
 I did not develop this software, The code is sourced from the Tenda U11 driver. I only made some modifications to the code to adapt it to newer kernel versions. Apart from compilation issues, I am unable to address other problems.
 
+### License
+
+The driver source is distributed under the GNU General Public License version 2
+(`GPL-2.0-only`); see [LICENSE](LICENSE). Preserve the copyright and license
+notices in individual files.
+
+The license text is copied verbatim from Radxa's
+[`src/LICENSE`](https://github.com/radxa-pkg/aic8800/blob/969601fd69b5c33f965558c9e90633067733e8c1/src/LICENSE).
+The [upstream licensing commit](https://github.com/radxa-pkg/aic8800/commit/969601fd69b5c33f965558c9e90633067733e8c1)
+records AIC's approval to license the released driver source under GPLv2.
+Radxa's [current copyright metadata](https://github.com/radxa-pkg/aic8800/blob/d13d07963cd15d731e2895e8288a04cca6152ac9/debian/copyright)
+assigns GPL-2 to `src/*` and the same license to driver patches; its root
+GPL-3.0-or-later license covers Radxa's packaging files.
+
 ### Attention
 Before installing the driver, delete all aic8800-related folders under /lib/firmware. Using an incorrect firmware version may cause the system to freeze.
 
+#### Pandora 88M80 mode switching
+
+Pandora 88M80 adapters that initially appear as USB device `1111:1111` are
+automatically switched to `a69c:8d80` by sending the required `F3` then `F2`
+commands. Existing users must rerun `sudo ./install.sh` to replace the installed
+usb_modeswitch configuration, then unplug the adapter completely and plug it
+back in.
+
+If automatic switching does not occur, try the same sequence manually:
+
+```bash
+sudo usb_modeswitch -v 1111 -p 1111 \
+  -M "555342438765432100000000000010fd0000000000000000000000000000f3" \
+  -2 "555342438765432100000000000010fd0000000000000000000000000000f2"
+```
+
+This only addresses switching from `1111:1111` to `a69c:8d80`. If the device
+has reached `a69c:8d80` but firmware startup still fails, see
+[issue #79](https://github.com/shenmintao/aic8800d80/issues/79).
+
 ### Installation Steps
+
+For OpenWrt SDK/buildroot builds, see [OpenWrt build notes](OPENWRT.md).
+OpenWrt can use a newer cfg80211 backport than its target kernel; these builds
+must pass the wireless stack version separately.
+
+For Arch-based distributions (Arch, CachyOS, …), see
+[Arch Linux / CachyOS install notes](INSTALL_ARCH.md) — including the AUR/DKMS
+path, matching kernel headers, mode-switch configuration, and module-index
+troubleshooting.
 
 #### Method 1: [Quick Installation](INSTALL_SCRIPT.md) (Recommended)
 
@@ -130,6 +183,69 @@ If the device is still not active, check the kernel logs for any errors related 
 sudo dmesg
 ```
 
+### Diagnostic Logging
+
+Both `aic8800_fdrv` and `aic_load_fw` default to `aicwf_dbg_level=1`
+(`LOGERROR`), matching
+[Radxa's logging default](https://github.com/radxa-pkg/aic8800/blob/fce88024ed40279def034e203128e0892fdbcac3/debian/patches/fix-Lower-the-debugging-log-level.patch).
+This changes the driver's log mask; it does not remove the detailed log
+statements or suppress direct `printk()` / `dev_err()` output.
+
+Enabling INFO (`0x2`) adds concise Wi-Fi diagnostics:
+
+- A firmware patch-table summary with the file name and number of entries written.
+- For builds without `CONFIG_SUPPORT_4ADDR`, a count of dropped 4-address frames:
+  the first at once, then at most once a minute as more frames arrive.
+
+These routine summaries are hidden at the ERROR-only default. DEBUG (`0x8`)
+adds each patch-table entry and each dropped 4-address frame, including its
+hex dump. Both use `aicwf_dbg_level`; kernel dynamic debug support and a
+module rebuild are not required. Existing error reports retain `LOGERROR`.
+
+Some chip-revision, firmware-version and initialization messages use
+`LOGINFO`. Enable detailed logging before reproducing a startup failure or
+checking `chip_mcu_id` for branch selection. Messages suppressed earlier
+cannot be recovered by changing the mask afterward.
+
+For modules that are already loaded, enable detailed logs without rebuilding:
+
+```bash
+echo 527 | sudo tee /sys/module/aic8800_fdrv/parameters/aicwf_dbg_level
+echo 15 | sudo tee /sys/module/aic_load_fw/parameters/aicwf_dbg_level
+sudo dmesg -w
+```
+
+The Wi-Fi mask `527` (`0x20f`) enables ERROR, INFO, TRACE, DEBUG and FW;
+the loader mask `15` (`0x0f`) enables ERROR, INFO, TRACE and DEBUG.
+Reproduce the problem, then save the kernel log with
+`sudo journalctl -k -b --no-pager` or `sudo dmesg`.
+
+To capture messages from module initialization, set the options before the
+modules are loaded:
+
+```bash
+sudo tee /etc/modprobe.d/aic8800-debug.conf >/dev/null <<'EOF'
+options aic8800_fdrv aicwf_dbg_level=527
+options aic_load_fw aicwf_dbg_level=15
+EOF
+```
+
+Reload both modules or reboot, then reproduce the device initialization.
+If the modules load from an initramfs, regenerate that initramfs using your
+distribution's procedure so it includes these options.
+
+After collecting the logs, remove the temporary
+`/etc/modprobe.d/aic8800-debug.conf` file and restore the running modules'
+default masks:
+
+```bash
+echo 1 | sudo tee /sys/module/aic8800_fdrv/parameters/aicwf_dbg_level
+echo 1 | sudo tee /sys/module/aic_load_fw/parameters/aicwf_dbg_level
+```
+
+If the options were included in an initramfs, regenerate it after removing
+the configuration as well.
+
 ### Bluetooth on Combo Adapters
 
 Bluetooth support does not require a separate AIC transport module. After
@@ -178,4 +294,3 @@ The Wi-Fi-reset recovery behavior tracked in
 [issue #53](https://github.com/shenmintao/aic8800d80/issues/53) remains a known
 limitation: after an airplane-mode or hotspot reset, Bluetooth may require a
 physical unplug/replug of the adapter.
-
