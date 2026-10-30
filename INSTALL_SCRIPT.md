@@ -1,4 +1,4 @@
-# Automated Installation Script
+## Automated Installation Script
 
 ## Overview
 
